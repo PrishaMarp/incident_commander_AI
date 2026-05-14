@@ -20,3 +20,5 @@ def _pick(*keys: str, default: str = "") -> str:
 GEMINI_API_KEY = _pick("GEMINI_API_KEY")
 # Flash model for triage (2.5+ ids work on current API; override in .env)
 TRIAGE_MODEL = _pick("TRIAGE_MODEL", "GEMINI_MODEL", "FLASH_MODEL", default="gemini-2.5-flash")
+# Pro model for root-cause reasoning (override if 404 / quota)
+ROOT_CAUSE_MODEL = _pick("ROOT_CAUSE_MODEL", "PRO_MODEL", default="gemini-2.5-pro")

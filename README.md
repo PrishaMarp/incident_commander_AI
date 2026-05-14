@@ -1,13 +1,14 @@
 # incident_commander_AI
 
-Minimal **Incident Commander** scaffold: simulated DB logs + **Gemini Flash triage** (JSON → summary line).
+Minimal **Incident Commander** flow: simulated DB logs → **Gemini Flash triage** → **Gemini Pro root cause** (streamed to the terminal).
 
 ## Layout
 
-- `backend/config.py` — loads `.env` from repo root  
-- `backend/models.py` — `TriageResult` (Pydantic)  
-- `backend/simulation/db_failure.py` — fake log lines + `print_feed()`  
-- `backend/agents/triage.py` — `run_triage(log_lines)`  
+- `backend/config.py` — repo-root `.env`; `TRIAGE_MODEL`, `ROOT_CAUSE_MODEL`
+- `backend/models.py` — `TriageResult`
+- `backend/simulation/db_failure.py` — fake logs + `print_feed()`
+- `backend/agents/triage.py` — `run_triage(log_lines)`
+- `backend/agents/root_cause.py` — `run_root_cause_streaming(log_lines, triage)`
 
 ## Setup
 
@@ -25,15 +26,14 @@ From the **repo root**:
 python run_demo.py
 ```
 
-Logs print with a 0.5s delay, then triage runs and prints  
-`Severity: … | Type: … | Services: …` plus a short summary.
-
 **Logs only** (no API):
 
 ```bash
 python -m backend.simulation.db_failure
 ```
 
-## Quotas / models
+## Models / quotas
 
-If you see **429**, wait or set `GEMINI_MODEL` / `TRIAGE_MODEL` in `.env`. See [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits).
+Set in `.env` as needed: `GEMINI_MODEL`, `TRIAGE_MODEL`, `ROOT_CAUSE_MODEL` (or `PRO_MODEL`). If you hit **429**, wait or switch model ids — [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits), [models](https://ai.google.dev/gemini-api/docs/models).
+
+If **Pro** returns **429** on root cause, the app **retries once** with your **Flash** triage model (same key, often a separate quota bucket).
