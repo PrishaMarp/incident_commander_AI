@@ -1,12 +1,8 @@
-"""
-Simulated incident feed: fake DB failure log lines, printed one at a time.
-Run: python simulate_incident.py
-"""
+"""Fake DB failure log lines (proposal-style)."""
 
 import time
 from datetime import datetime, timezone
 
-# Log line templates (same style as the incident-commander proposal)
 DB_FAILURE_LOGS = [
     "[{ts}] ERROR  database     Connection pool exhausted (max=20, active=20, waiting=47)",
     "[{ts}] ERROR  api-gateway  upstream connect error or disconnect/reset before headers",
@@ -24,12 +20,19 @@ DB_FAILURE_LOGS = [
 ]
 
 
-def main() -> None:
-    for template in DB_FAILURE_LOGS:
-        ts = datetime.now(timezone.utc).isoformat()
-        print(template.format(ts=ts))
-        time.sleep(0.5)
+def render_log_lines() -> list[str]:
+    ts = datetime.now(timezone.utc).isoformat()
+    return [template.format(ts=ts) for template in DB_FAILURE_LOGS]
+
+
+def print_feed(delay_s: float = 0.5) -> list[str]:
+    """Print each line to stdout; return the lines for triage."""
+    lines = render_log_lines()
+    for line in lines:
+        print(line)
+        time.sleep(delay_s)
+    return lines
 
 
 if __name__ == "__main__":
-    main()
+    print_feed()
