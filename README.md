@@ -5,12 +5,18 @@ A Gemini-powered AI incident response platform that monitors system failures, an
 
 1. `python3.11 -m venv venv` then `source venv/bin/activate`
 2. `pip install -r requirements.txt`
-3. Copy `.env.example` to `.env` and set `GEMINI_API_KEY` from [Google AI Studio](https://aistudio.google.com/apikey)
-
-If you hit **429 quota** on a model, wait or change `GEMINI_MODEL` in `.env` — see [rate limits](https://ai.google.dev/gemini-api/docs/rate-limits) and [models](https://ai.google.dev/gemini-api/docs/models).
+3. Update `GEMINI_API_KEY` in `.env`
 
 ## Simulate incident (local log feed)
 
 ```bash
 python simulate_incident.py
 ```
+
+## Triage (Gemini Flash → JSON)
+
+```bash
+python triage_agent.py
+```
+
+Uses `TRIAGE_MODEL` if set, else `GEMINI_MODEL`, else `gemini-1.5-flash`. If `1.5-flash` is not available for your key, set `TRIAGE_MODEL=gemini-2.5-flash` in `.env`.
