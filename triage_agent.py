@@ -6,7 +6,6 @@ Run from repo root:  python triage_agent.py
 """
 
 import json
-import re
 import sys
 import warnings
 from datetime import datetime, timezone
@@ -49,10 +48,15 @@ Log lines:
 
 
 def _strip_json_fences(text: str) -> str:
+    """Strip ```json ... ``` fences. Prefer the guide's removeprefix/removesuffix when it applies."""
     text = text.strip()
-    text = re.sub(r"^```(?:json)?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s*```$", "", text)
-    return text.strip()
+    if text.startswith("```json"):
+        return text.removeprefix("```json").strip().removesuffix("```").strip()
+    if text.lower().startswith("```json"):
+        return text[7:].strip().removesuffix("```").strip()
+    if text.startswith("```"):
+        text = text[3:].strip()
+    return text.removesuffix("```").strip()
 
 
 def main() -> None:
@@ -80,10 +84,18 @@ def main() -> None:
     cleaned = _strip_json_fences(raw)
     try:
         data = json.loads(cleaned)
-        print("\n--- Parsed JSON ---")
-        print(json.dumps(data, indent=2))
+        severity = data.get("severity", "?")
+        incident_type = data.get("incident_type", "?")
+        services = data.get("affected_services") or []
+        if isinstance(services, str):
+            services = [services]
+        services_str = ", ".join(str(s).strip() for s in services if s) or "(none)"
+        print(
+            f"\nSeverity: {severity} | Type: {incident_type} | Services: {services_str}"
+        )
     except json.JSONDecodeError as e:
         print("\n(Could not parse as JSON:", e, ")", file=sys.stderr)
+        print("Cleaned text was:\n", cleaned[:800], file=sys.stderr)
 
 
 if __name__ == "__main__":
