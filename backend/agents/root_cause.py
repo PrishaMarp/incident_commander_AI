@@ -3,8 +3,8 @@
 import sys
 import warnings
 
-import google.generativeai as genai
-from google.api_core import exceptions as google_exceptions
+from google import genai
+from google.genai import errors as genai_errors
 
 from backend.config import GEMINI_API_KEY, ROOT_CAUSE_MODEL, TRIAGE_MODEL
 from backend.models import TriageResult
@@ -29,14 +29,16 @@ Use clear markdown headers. End with a **CONCLUSION** section: one sentence root
 
 
 def _stream(model_name: str, prompt: str) -> str:
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=FutureWarning)
-        genai.configure(api_key=GEMINI_API_KEY)
-        model = genai.GenerativeModel(model_name)
+    # updated to instantiate the client directly with the config key
+    client = genai.Client(api_key=GEMINI_API_KEY)
     full = ""
-    response = model.generate_content(prompt, stream=True)
+    response = client.models.generate_content_stream(
+        model=model_name,
+        contents=prompt
+    )
+
     for chunk in response:
-        piece = getattr(chunk, "text", None) or ""
+        piece = chunk.text or ""
         if piece:
             full += piece
             print(piece, end="", flush=True)
@@ -62,11 +64,12 @@ def run_root_cause_streaming(log_lines: list[str], triage: TriageResult) -> str:
 
     try:
         return _stream(primary, prompt)
-    except google_exceptions.ResourceExhausted:
-        if not fallback:
+    except genai_errors.APIError as e:
+        if e.code == 429 and fallback:
+            print(
+                f"\n[{primary}] quota exhausted - retrying root cause with {fallback}.\n",
+                file=sys.stderr,
+            )
+            return _stream(fallback, prompt)
+        else:
             raise
-        print(
-            f"\n[{primary}] quota exhausted — retrying root cause with {fallback}.\n",
-            file=sys.stderr,
-        )
-        return _stream(fallback, prompt)
