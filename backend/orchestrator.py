@@ -7,7 +7,7 @@ from backend.agents.root_cause import run_root_cause_streaming
 from backend.agents.triage import format_summary_line, run_triage
 from backend.config import ROOT_CAUSE_MODEL, TRIAGE_MODEL
 from backend.gemini_util import format_api_error
-from backend.simulation import api_outage, db_failure
+from backend.simulation import api_outage, db_failure, memory_leak
 from backend.trace import (
     TraceEvent,
     agent_complete,
@@ -25,6 +25,7 @@ LogFeed = Callable[[float, Callable[[str], None] | None], list[str]]
 SCENARIOS: dict[str, LogFeed] = {
     "db_failure": db_failure.stream_feed,
     "api_outage": api_outage.stream_feed,
+    "memory_leak": memory_leak.stream_feed,
 }
 
 
