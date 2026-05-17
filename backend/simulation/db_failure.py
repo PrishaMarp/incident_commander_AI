@@ -1,6 +1,7 @@
 """Fake DB failure log lines (proposal-style)."""
 
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 
 DB_FAILURE_LOGS = [
@@ -25,13 +26,24 @@ def render_log_lines() -> list[str]:
     return [template.format(ts=ts) for template in DB_FAILURE_LOGS]
 
 
-def print_feed(delay_s: float = 0.5) -> list[str]:
-    """Print each line to stdout; return the lines for triage."""
+def stream_feed(
+    delay_s: float = 0.5,
+    on_line: Callable[[str], None] | None = None,
+) -> list[str]:
+    """Emit each log line (optional callback) and return all lines for triage."""
     lines = render_log_lines()
     for line in lines:
-        print(line)
+        if on_line:
+            on_line(line)
+        else:
+            print(line)
         time.sleep(delay_s)
     return lines
+
+
+def print_feed(delay_s: float = 0.5) -> list[str]:
+    """Print each line to stdout; return the lines for triage."""
+    return stream_feed(delay_s)
 
 
 if __name__ == "__main__":

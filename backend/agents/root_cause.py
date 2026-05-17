@@ -1,7 +1,7 @@
-"""Gemini Pro root-cause analysis — streams markdown to stdout."""
+"""Gemini Pro root-cause analysis — streams markdown to stdout or a callback."""
 
 import sys
-import warnings
+from collections.abc import Callable
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -28,26 +28,40 @@ Use clear markdown headers. End with a **CONCLUSION** section: one sentence root
 """
 
 
-def _stream(model_name: str, prompt: str) -> str:
-    # updated to instantiate the client directly with the config key
+def _stream(
+    model_name: str,
+    prompt: str,
+    *,
+    on_chunk: Callable[[str], None] | None = None,
+) -> str:
     client = genai.Client(api_key=GEMINI_API_KEY)
     full = ""
     response = client.models.generate_content_stream(
         model=model_name,
-        contents=prompt
+        contents=prompt,
     )
 
     for chunk in response:
         piece = chunk.text or ""
         if piece:
             full += piece
-            print(piece, end="", flush=True)
-    print()
+            if on_chunk:
+                on_chunk(piece)
+            else:
+                print(piece, end="", flush=True)
+    if not on_chunk:
+        print()
     return full
 
 
-def run_root_cause_streaming(log_lines: list[str], triage: TriageResult) -> str:
-    """Stream response to stdout. If Pro hits 429, retry once with Flash (triage model)."""
+def run_root_cause_streaming(
+    log_lines: list[str],
+    triage: TriageResult,
+    *,
+    on_chunk: Callable[[str], None] | None = None,
+    on_notice: Callable[[str], None] | None = None,
+) -> str:
+    """Stream response via on_chunk or stdout. If Pro hits 429, retry once with Flash."""
     if not GEMINI_API_KEY:
         raise ValueError("Missing GEMINI_API_KEY in .env (repo root).")
 
@@ -63,13 +77,13 @@ def run_root_cause_streaming(log_lines: list[str], triage: TriageResult) -> str:
     fallback = TRIAGE_MODEL if TRIAGE_MODEL != primary else None
 
     try:
-        return _stream(primary, prompt)
+        return _stream(primary, prompt, on_chunk=on_chunk)
     except genai_errors.APIError as e:
         if e.code == 429 and fallback:
-            print(
-                f"\n[{primary}] quota exhausted - retrying root cause with {fallback}.\n",
-                file=sys.stderr,
-            )
-            return _stream(fallback, prompt)
-        else:
-            raise
+            notice = f"[{primary}] quota exhausted — retrying root cause with {fallback}."
+            if on_notice:
+                on_notice(notice)
+            else:
+                print(f"\n{notice}\n", file=sys.stderr)
+            return _stream(fallback, prompt, on_chunk=on_chunk)
+        raise
