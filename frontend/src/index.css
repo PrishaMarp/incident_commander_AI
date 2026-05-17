@@ -1,0 +1,108 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Warm light surfaces */
+  --color-surface: #fffbf7;
+  --color-surface-elevated: #f7f2ea;
+  --color-panel: #ffffff;
+  --color-panel-border: #e8dfd3;
+  --color-muted: #7a6f63;
+  --color-text: #2a241c;
+  --color-text-secondary: #4a4238;
+
+  /* Brand: terracotta + honey */
+  --color-brand-from: #c2410c;
+  --color-brand-to: #d97706;
+  --color-accent: #ea580c;
+  --color-accent-dim: #c2410c;
+  --color-accent-glow: #fed7aa66;
+  --color-on-brand: #ffffff;
+
+  /* Semantic (readable on white) */
+  --color-log: #0e7490;
+  --color-triage: #0369a1;
+  --color-agent: #7c3aed;
+  --color-root: #15803d;
+  --color-danger: #dc2626;
+  --color-warn: #ca8a04;
+  --color-success: #16a34a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text);
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, var(--color-accent-glow), transparent),
+    radial-gradient(ellipse 50% 40% at 100% 0%, #fde68a33, transparent),
+    radial-gradient(ellipse 40% 30% at 0% 100%, #ffedd533, transparent),
+    var(--color-surface);
+  -webkit-font-smoothing: antialiased;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.25s ease-out;
+}
+
+.scroll-panel {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-panel-border) transparent;
+}
+
+.scroll-panel::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scroll-panel::-webkit-scrollbar-thumb {
+  background: var(--color-panel-border);
+  border-radius: 3px;
+}
+
+.trace-agent-start {
+  border-color: color-mix(in srgb, var(--color-agent) 28%, var(--color-panel-border));
+  background: color-mix(in srgb, var(--color-agent) 10%, white);
+}
+.trace-triage {
+  border-color: color-mix(in srgb, var(--color-triage) 28%, var(--color-panel-border));
+  background: color-mix(in srgb, var(--color-triage) 10%, white);
+}
+.trace-root {
+  border-color: color-mix(in srgb, var(--color-root) 28%, var(--color-panel-border));
+  background: color-mix(in srgb, var(--color-root) 10%, white);
+}
