@@ -8,12 +8,11 @@ from pathlib import Path
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
-from google.genai import errors as genai_errors
-
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from backend.gemini_util import format_api_error  # noqa: E402
 from backend.orchestrator import SCENARIOS, run_incident  # noqa: E402
 from backend.trace import TraceEvent  # noqa: E402
 
@@ -158,22 +157,13 @@ async def incident_ws(
             await asyncio.to_thread(run_incident, scenario, emit)
         except ValueError as exc:
             await queue.put({"type": "agent_error", "agent": "orchestrator", "message": str(exc)})
-        except genai_errors.APIError as exc:
-            if exc.code == 429:
-                await queue.put(
-                    {
-                        "type": "agent_error",
-                        "agent": "orchestrator",
-                        "message": "429 quota — wait and retry, or change models in .env",
-                    }
-                )
-            else:
-                await queue.put(
-                    {"type": "agent_error", "agent": "orchestrator", "message": str(exc)}
-                )
         except Exception as exc:
             await queue.put(
-                {"type": "agent_error", "agent": "orchestrator", "message": str(exc)}
+                {
+                    "type": "agent_error",
+                    "agent": "orchestrator",
+                    "message": format_api_error(exc),
+                }
             )
         finally:
             await queue.put(None)

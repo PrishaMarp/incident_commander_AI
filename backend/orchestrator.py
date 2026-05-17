@@ -6,7 +6,8 @@ from typing import Any
 from backend.agents.root_cause import run_root_cause_streaming
 from backend.agents.triage import format_summary_line, run_triage
 from backend.config import ROOT_CAUSE_MODEL, TRIAGE_MODEL
-from backend.simulation import db_failure
+from backend.gemini_util import format_api_error
+from backend.simulation import api_outage, db_failure
 from backend.trace import (
     TraceEvent,
     agent_complete,
@@ -23,6 +24,7 @@ LogFeed = Callable[[float, Callable[[str], None] | None], list[str]]
 
 SCENARIOS: dict[str, LogFeed] = {
     "db_failure": db_failure.stream_feed,
+    "api_outage": api_outage.stream_feed,
 }
 
 
@@ -50,7 +52,7 @@ def run_incident(
     try:
         triage = run_triage(lines)
     except Exception as exc:
-        emit(agent_error("triage", str(exc)))
+        emit(agent_error("triage", format_api_error(exc)))
         raise
     emit(agent_result("triage", triage.model_dump()))
     emit(agent_complete("triage"))
@@ -64,7 +66,7 @@ def run_incident(
             on_notice=lambda msg: emit(agent_delta("root_cause", f"\n{msg}\n")),
         )
     except Exception as exc:
-        emit(agent_error("root_cause", str(exc)))
+        emit(agent_error("root_cause", format_api_error(exc)))
         raise
     emit(agent_complete("root_cause"))
 

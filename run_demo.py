@@ -10,6 +10,7 @@ if str(_ROOT) not in sys.path:
 
 from google.genai import errors as genai_errors
 
+from backend.gemini_util import format_api_error
 from backend.orchestrator import format_triage_for_terminal, run_incident
 from backend.trace import TraceEvent
 
@@ -46,11 +47,7 @@ def main() -> None:
         run_incident("db_failure", _terminal_emit, log_delay_s=0.5)
     except genai_errors.APIError as e:
         if e.code == 429:
-            print(
-                "\n429 quota — wait and retry, or set TRIAGE_MODEL / GEMINI_MODEL in .env.\n"
-                "https://ai.google.dev/gemini-api/docs/rate-limits",
-                file=sys.stderr,
-            )
+            print(f"\n{format_api_error(e)}\n", file=sys.stderr)
             raise SystemExit(2) from None
         raise
     except ValueError as e:

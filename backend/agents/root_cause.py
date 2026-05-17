@@ -6,7 +6,8 @@ from collections.abc import Callable
 from google import genai
 from google.genai import errors as genai_errors
 
-from backend.config import GEMINI_API_KEY, ROOT_CAUSE_MODEL, TRIAGE_MODEL
+from backend.config import GEMINI_API_KEY, ROOT_CAUSE_MODEL, TRIAGE_FALLBACK_MODEL, TRIAGE_MODEL
+from backend.gemini_util import _EXTRA_TRIAGE_MODELS, should_try_next_model, unique_models
 from backend.models import TriageResult
 
 ROOT_CAUSE_PROMPT = """You are a senior SRE performing root cause analysis. Think step by step.
@@ -73,17 +74,25 @@ def run_root_cause_streaming(
         logs=logs_blob,
     )
 
-    primary = ROOT_CAUSE_MODEL
-    fallback = TRIAGE_MODEL if TRIAGE_MODEL != primary else None
+    models = unique_models(
+        ROOT_CAUSE_MODEL, TRIAGE_MODEL, TRIAGE_FALLBACK_MODEL, *_EXTRA_TRIAGE_MODELS
+    )
+    last_exc: genai_errors.APIError | None = None
 
-    try:
-        return _stream(primary, prompt, on_chunk=on_chunk)
-    except genai_errors.APIError as e:
-        if e.code == 429 and fallback:
-            notice = f"[{primary}] quota exhausted — retrying root cause with {fallback}."
-            if on_notice:
-                on_notice(notice)
-            else:
-                print(f"\n{notice}\n", file=sys.stderr)
-            return _stream(fallback, prompt, on_chunk=on_chunk)
-        raise
+    for i, model in enumerate(models):
+        try:
+            return _stream(model, prompt, on_chunk=on_chunk)
+        except genai_errors.APIError as e:
+            last_exc = e
+            if should_try_next_model(e, i, len(models)):
+                notice = f"[{model}] unavailable — retrying root cause with {models[i + 1]}."
+                if on_notice:
+                    on_notice(notice)
+                else:
+                    print(f"\n{notice}\n", file=sys.stderr)
+                continue
+            raise
+
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("No root cause model configured.")
