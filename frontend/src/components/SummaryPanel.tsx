@@ -11,9 +11,11 @@ import {
   severityEmoji,
   severityLabel,
 } from "../utils/incidentSummary";
+import { CopySlackButton, SummaryHeaderActions } from "./SummaryActions";
 import { Panel } from "./Panel";
 import { SeverityBadge } from "./SeverityBadge";
 import { SlackPreview } from "./SlackPreview";
+import type { IncidentReportInput } from "../utils/incidentReport";
 
 function formatIncidentType(type: string) {
   return type.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -160,6 +162,8 @@ function AgentProgress({
 }
 
 export function SummaryPanel({
+  scenario,
+  logs,
   triage,
   rootCause,
   remediation,
@@ -167,6 +171,8 @@ export function SummaryPanel({
   status,
   activeAgent,
 }: {
+  scenario: string | null;
+  logs: string[];
   triage: TriagePayload | null;
   rootCause: string;
   remediation: string;
@@ -191,10 +197,22 @@ export function SummaryPanel({
   const showSlack = Boolean(comms);
   const isComplete = status === "complete";
 
+  const reportInput: IncidentReportInput = {
+    scenario,
+    triage,
+    rootCause,
+    remediation,
+    comms,
+    logs,
+  };
+
   return (
     <Panel
       title="Incident summary"
       subtitle={isComplete ? "Full picture from all agents" : "Builds as specialists finish"}
+      footer={
+        <SummaryHeaderActions reportInput={reportInput} canExport={Boolean(triage)} />
+      }
       icon={
         <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
           <path
@@ -323,9 +341,12 @@ export function SummaryPanel({
 
         {showSlack && comms && (
           <div className="space-y-2">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">
-              Slack draft · {comms.channel}
-            </p>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted)]">
+                Slack draft · {comms.channel}
+              </p>
+              <CopySlackButton comms={comms} />
+            </div>
             <SlackPreview channel={comms.channel} message={comms.message} status={comms.status} />
           </div>
         )}

@@ -120,6 +120,8 @@ export default function App() {
         </div>
         <div className="flex min-h-[280px] flex-1 flex-col sm:min-h-0 sm:max-w-[30%]">
           <SummaryPanel
+            scenario={incident.scenario}
+            logs={incident.logs}
             triage={incident.triage}
             rootCause={incident.rootCause}
             remediation={incident.remediation}
