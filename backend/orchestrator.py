@@ -3,9 +3,11 @@
 from collections.abc import Callable
 from typing import Any
 
+from backend.agents.comms import run_comms
+from backend.agents.remediation import run_remediation_streaming
 from backend.agents.root_cause import run_root_cause_streaming
 from backend.agents.triage import format_summary_line, run_triage
-from backend.config import ROOT_CAUSE_MODEL, TRIAGE_MODEL
+from backend.config import COMMS_MODEL, REMEDIATION_MODEL, ROOT_CAUSE_MODEL, TRIAGE_MODEL
 from backend.gemini_util import format_api_error
 from backend.simulation import api_outage, db_failure, memory_leak
 from backend.trace import (
@@ -58,18 +60,56 @@ def run_incident(
     emit(agent_result("triage", triage.model_dump()))
     emit(agent_complete("triage"))
 
+    root_cause_parts: list[str] = []
+
+    def on_root_cause_chunk(text: str) -> None:
+        root_cause_parts.append(text)
+        emit(agent_delta("root_cause", text))
+
     emit(agent_start("root_cause", ROOT_CAUSE_MODEL))
     try:
         run_root_cause_streaming(
             lines,
             triage,
-            on_chunk=lambda text: emit(agent_delta("root_cause", text)),
+            on_chunk=on_root_cause_chunk,
             on_notice=lambda msg: emit(agent_delta("root_cause", f"\n{msg}\n")),
         )
     except Exception as exc:
         emit(agent_error("root_cause", format_api_error(exc)))
         raise
     emit(agent_complete("root_cause"))
+
+    root_cause_text = "".join(root_cause_parts)
+
+    remediation_parts: list[str] = []
+
+    def on_remediation_chunk(text: str) -> None:
+        remediation_parts.append(text)
+        emit(agent_delta("remediation", text))
+
+    emit(agent_start("remediation", REMEDIATION_MODEL))
+    try:
+        run_remediation_streaming(
+            triage,
+            root_cause_text,
+            on_chunk=on_remediation_chunk,
+            on_notice=lambda msg: emit(agent_delta("remediation", f"\n{msg}\n")),
+        )
+    except Exception as exc:
+        emit(agent_error("remediation", format_api_error(exc)))
+        raise
+    emit(agent_complete("remediation"))
+
+    remediation_text = "".join(remediation_parts)
+
+    emit(agent_start("comms", COMMS_MODEL))
+    try:
+        comms = run_comms(triage, root_cause_text, remediation_text)
+    except Exception as exc:
+        emit(agent_error("comms", format_api_error(exc)))
+        raise
+    emit(agent_result("comms", comms.model_dump()))
+    emit(agent_complete("comms"))
 
     emit(incident_complete())
 

@@ -28,12 +28,18 @@ def _terminal_emit(event: TraceEvent) -> None:
         print(f"\n--- {agent}{label} ---\n")
     elif kind == "agent_delta":
         print(event.get("text", ""), end="", flush=True)
-    elif kind == "agent_result" and event.get("agent") == "triage":
+    elif kind == "agent_result":
+        agent = event.get("agent", "")
         payload = event.get("payload") or {}
-        print(format_triage_for_terminal(payload))
-        if payload.get("summary"):
-            print(f"Summary: {payload['summary']}")
-    elif kind == "agent_complete" and event.get("agent") == "root_cause":
+        if agent == "triage":
+            print(format_triage_for_terminal(payload))
+            if payload.get("summary"):
+                print(f"Summary: {payload['summary']}")
+        elif agent == "comms":
+            channel = payload.get("channel", "#incidents")
+            print(f"\n--- Slack draft ({channel}) ---\n")
+            print(payload.get("message", ""))
+    elif kind == "agent_complete" and event.get("agent") in ("root_cause", "remediation"):
         print()
     elif kind == "agent_error":
         print(f"\nError [{event.get('agent')}]: {event.get('message')}", file=sys.stderr)

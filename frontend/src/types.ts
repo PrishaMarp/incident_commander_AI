@@ -15,8 +15,14 @@ export interface TraceEvent {
   agent?: string;
   model?: string;
   text?: string;
-  payload?: TriagePayload;
+  payload?: TriagePayload | CommsPayload;
   message?: string;
+}
+
+export interface CommsPayload {
+  channel: string;
+  status?: string;
+  message: string;
 }
 
 export interface TriagePayload {
@@ -34,7 +40,7 @@ export interface TraceEntry {
   agent: string;
   model?: string;
   text?: string;
-  payload?: TriagePayload;
+  payload?: TriagePayload | CommsPayload;
   message?: string;
   at: number;
 }

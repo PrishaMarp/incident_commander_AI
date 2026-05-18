@@ -24,3 +24,5 @@ TRIAGE_MODEL = _pick("TRIAGE_MODEL", "GEMINI_MODEL", "FLASH_MODEL", default="gem
 TRIAGE_FALLBACK_MODEL = _pick("TRIAGE_FALLBACK_MODEL", default="gemini-2.5-flash")
 # Pro model for root-cause reasoning (override if 404 / quota)
 ROOT_CAUSE_MODEL = _pick("ROOT_CAUSE_MODEL", "PRO_MODEL", default="gemini-2.5-pro")
+REMEDIATION_MODEL = _pick("REMEDIATION_MODEL", default=TRIAGE_MODEL or "gemini-2.0-flash")
+COMMS_MODEL = _pick("COMMS_MODEL", default=TRIAGE_MODEL or "gemini-2.0-flash")

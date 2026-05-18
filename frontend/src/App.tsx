@@ -113,6 +113,7 @@ export default function App() {
           <TracePanel
             trace={incident.trace}
             rootCause={incident.rootCause}
+            remediation={incident.remediation}
             activeAgent={incident.activeAgent}
             isLive={isLive}
           />
@@ -121,7 +122,10 @@ export default function App() {
           <SummaryPanel
             triage={incident.triage}
             rootCause={incident.rootCause}
+            remediation={incident.remediation}
+            comms={incident.comms}
             status={incident.status}
+            activeAgent={incident.activeAgent}
           />
         </div>
       </main>

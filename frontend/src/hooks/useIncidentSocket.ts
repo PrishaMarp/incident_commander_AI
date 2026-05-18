@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RunStatus, TraceEntry, TraceEvent, TriagePayload } from "../types";
+import type { CommsPayload, RunStatus, TraceEntry, TraceEvent, TriagePayload } from "../types";
 
 let entryId = 0;
 function nextId() {
@@ -23,6 +23,8 @@ export interface IncidentState {
   trace: TraceEntry[];
   triage: TriagePayload | null;
   rootCause: string;
+  remediation: string;
+  comms: CommsPayload | null;
   error: string | null;
   activeAgent: string | null;
 }
@@ -34,6 +36,8 @@ const initial: IncidentState = {
   trace: [],
   triage: null,
   rootCause: "",
+  remediation: "",
+  comms: null,
   error: null,
   activeAgent: null,
 };
@@ -84,39 +88,61 @@ export function useIncidentSocket() {
         }));
         break;
 
-      case "agent_delta":
-        if (msg.agent === "root_cause" && msg.text) {
+      case "agent_delta": {
+        if (!msg.text || !msg.agent) break;
+        const isNotice =
+          msg.text.trim().startsWith("[") && msg.text.includes("quota");
+        if (isNotice) {
+          const agent = msg.agent;
           setState((s) => ({
             ...s,
-            rootCause: s.rootCause + msg.text,
-            trace:
-              msg.text?.trim().startsWith("[") && msg.text.includes("quota")
-                ? [
-                    ...s.trace,
-                    {
-                      id: nextId(),
-                      kind: "notice",
-                      agent: msg.agent!,
-                      text: msg.text,
-                      at: Date.now(),
-                    },
-                  ]
-                : s.trace,
+            trace: [
+              ...s.trace,
+              {
+                id: nextId(),
+                kind: "notice" as const,
+                agent,
+                text: msg.text,
+                at: Date.now(),
+              },
+            ],
           }));
+          break;
+        }
+        if (msg.agent === "root_cause") {
+          setState((s) => ({ ...s, rootCause: s.rootCause + msg.text }));
+        } else if (msg.agent === "remediation") {
+          setState((s) => ({ ...s, remediation: s.remediation + msg.text }));
         }
         break;
+      }
 
       case "agent_result":
         if (msg.agent === "triage" && msg.payload) {
           setState((s) => ({
             ...s,
-            triage: msg.payload!,
+            triage: msg.payload as TriagePayload,
             trace: [
               ...s.trace,
               {
                 id: nextId(),
                 kind: "result",
                 agent: "triage",
+                payload: msg.payload,
+                at: Date.now(),
+              },
+            ],
+          }));
+        } else if (msg.agent === "comms" && msg.payload) {
+          setState((s) => ({
+            ...s,
+            comms: msg.payload as CommsPayload,
+            trace: [
+              ...s.trace,
+              {
+                id: nextId(),
+                kind: "result",
+                agent: "comms",
                 payload: msg.payload,
                 at: Date.now(),
               },

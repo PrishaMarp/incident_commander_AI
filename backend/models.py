@@ -10,3 +10,11 @@ class TriageResult(BaseModel):
     severity: str
     affected_services: List[str] = Field(default_factory=list)
     summary: str = ""
+
+
+class CommsResult(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    channel: str = "#incidents"
+    status: str = "Investigating"
+    message: str = ""
