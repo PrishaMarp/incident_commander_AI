@@ -6,6 +6,15 @@ function nextId() {
   return `e-${++entryId}`;
 }
 
+/** Vercel serverless does not support WebSockets; use SSE instead. */
+function preferSse(): boolean {
+  if (import.meta.env.VITE_USE_SSE === "true") return true;
+  if (typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app")) {
+    return true;
+  }
+  return false;
+}
+
 function wsUrl(scenario: string): string {
   const base = import.meta.env.VITE_WS_URL as string | undefined;
   if (base) {
@@ -14,6 +23,43 @@ function wsUrl(scenario: string): string {
   }
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   return `${proto}//${window.location.host}/ws/incident?scenario=${encodeURIComponent(scenario)}`;
+}
+
+function sseUrl(scenario: string): string {
+  const wsBase = import.meta.env.VITE_WS_URL as string | undefined;
+  if (wsBase) {
+    const httpish = wsBase.replace(/^wss:/i, "https:").replace(/^ws:/i, "http:");
+    const u = new URL(httpish.split("?")[0]);
+    u.pathname = "/sse/incident";
+    u.search = "";
+    u.searchParams.set("scenario", scenario);
+    return u.href;
+  }
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/sse/incident?scenario=${encodeURIComponent(scenario)}`;
+}
+
+function parseSseBuffer(buffer: string): { events: TraceEvent[]; rest: string } {
+  const events: TraceEvent[] = [];
+  let rest = buffer;
+  let idx: number;
+  while ((idx = rest.indexOf("\n\n")) >= 0) {
+    const block = rest.slice(0, idx);
+    rest = rest.slice(idx + 2);
+    for (const line of block.split("\n")) {
+      if (line.startsWith("data:")) {
+        const payload = line.slice(5).trim();
+        if (payload) {
+          try {
+            events.push(JSON.parse(payload) as TraceEvent);
+          } catch {
+            /* skip */
+          }
+        }
+      }
+    }
+  }
+  return { events, rest };
 }
 
 export interface IncidentState {
@@ -42,17 +88,27 @@ const initial: IncidentState = {
   activeAgent: null,
 };
 
+type Connection =
+  | { kind: "ws"; socket: WebSocket }
+  | { kind: "sse"; abort: AbortController };
+
 export function useIncidentSocket() {
   const [state, setState] = useState<IncidentState>(initial);
-  const wsRef = useRef<WebSocket | null>(null);
+  const connectionRef = useRef<Connection | null>(null);
 
   const reset = useCallback(() => {
     setState(initial);
   }, []);
 
   const stop = useCallback(() => {
-    wsRef.current?.close();
-    wsRef.current = null;
+    const c = connectionRef.current;
+    if (!c) return;
+    if (c.kind === "ws") {
+      c.socket.close();
+    } else {
+      c.abort.abort();
+    }
+    connectionRef.current = null;
   }, []);
 
   const handleEvent = useCallback((msg: TraceEvent) => {
@@ -209,8 +265,78 @@ export function useIncidentSocket() {
         scenario,
       });
 
+      if (preferSse()) {
+        const abort = new AbortController();
+        connectionRef.current = { kind: "sse", abort };
+
+        void (async () => {
+          try {
+            const res = await fetch(sseUrl(scenario), {
+              signal: abort.signal,
+              headers: { Accept: "text/event-stream" },
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => "");
+              setState((s) => ({
+                ...s,
+                status: "error",
+                error: text || `Stream failed (${res.status})`,
+              }));
+              connectionRef.current = null;
+              return;
+            }
+            setState((s) => (s.status === "connecting" ? { ...s, status: "running" } : s));
+
+            const reader = res.body?.getReader();
+            if (!reader) {
+              setState((s) => ({
+                ...s,
+                status: "error",
+                error: "No response body",
+              }));
+              connectionRef.current = null;
+              return;
+            }
+
+            const decoder = new TextDecoder();
+            let buf = "";
+            while (true) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              buf += decoder.decode(value, { stream: true });
+              const { events, rest } = parseSseBuffer(buf);
+              buf = rest;
+              for (const ev of events) {
+                handleEvent(ev);
+              }
+            }
+
+            setState((s) => {
+              if (s.status === "running" || s.status === "connecting") {
+                return { ...s, status: "error", error: s.error ?? "Stream ended unexpectedly" };
+              }
+              return s;
+            });
+          } catch (e) {
+            if (abort.signal.aborted) return;
+            setState((s) =>
+              s.status === "complete"
+                ? s
+                : {
+                    ...s,
+                    status: "error",
+                    error: e instanceof Error ? e.message : "Stream connection failed",
+                  }
+            );
+          } finally {
+            connectionRef.current = null;
+          }
+        })();
+        return;
+      }
+
       const ws = new WebSocket(wsUrl(scenario));
-      wsRef.current = ws;
+      connectionRef.current = { kind: "ws", socket: ws };
 
       ws.onopen = () => {
         setState((s) => (s.status === "connecting" ? { ...s, status: "running" } : s));
@@ -239,7 +365,7 @@ export function useIncidentSocket() {
           }
           return s;
         });
-        wsRef.current = null;
+        connectionRef.current = null;
       };
     },
     [handleEvent, stop]

@@ -1,13 +1,14 @@
 """FastAPI app: health check + WebSocket incident trace stream."""
 
 import asyncio
+import json
 import sys
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 _ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +41,54 @@ async def health() -> dict[str, str]:
 @app.get("/scenarios")
 async def list_scenarios() -> dict[str, list[str]]:
     return {"scenarios": list(SCENARIOS)}
+
+
+@app.get("/sse/incident")
+async def incident_sse(scenario: str = Query(default="db_failure")) -> StreamingResponse:
+    """Same trace events as WebSocket, over SSE — use on Vercel (no WebSocket on serverless)."""
+
+    async def event_stream() -> AsyncIterator[bytes]:
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[TraceEvent | None] = asyncio.Queue()
+        emit = _threadsafe_emit(loop, queue)
+
+        async def run_pipeline() -> None:
+            try:
+                await asyncio.to_thread(run_incident, scenario, emit)
+            except ValueError as exc:
+                await queue.put({"type": "agent_error", "agent": "orchestrator", "message": str(exc)})
+            except Exception as exc:
+                await queue.put(
+                    {
+                        "type": "agent_error",
+                        "agent": "orchestrator",
+                        "message": format_api_error(exc),
+                    }
+                )
+            finally:
+                await queue.put(None)
+
+        task = asyncio.create_task(run_pipeline())
+        try:
+            while True:
+                event = await queue.get()
+                if event is None:
+                    break
+                line = "data: " + json.dumps(event, separators=(",", ":")) + "\n\n"
+                yield line.encode("utf-8")
+        finally:
+            if not task.done():
+                task.cancel()
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 def _threadsafe_emit(

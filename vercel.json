@@ -1,4 +1,7 @@
 {
   "installCommand": "pip install -r requirements.txt && cd frontend && npm ci",
-  "buildCommand": "cd frontend && npm run build"
+  "buildCommand": "cd frontend && npm run build",
+  "functions": {
+    "app.py": { "maxDuration": 300 }
+  }
 }
