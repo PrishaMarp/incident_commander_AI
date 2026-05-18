@@ -127,20 +127,23 @@ export function useIncidentSocket() {
         break;
 
       case "agent_start":
-        setState((s) => ({
-          ...s,
-          activeAgent: msg.agent ?? null,
-          trace: [
-            ...s.trace,
-            {
-              id: nextId(),
-              kind: "start",
-              agent: msg.agent ?? "unknown",
-              model: msg.model,
-              at: Date.now(),
-            },
-          ],
-        }));
+        setState((s) => {
+          const agent = msg.agent ?? "unknown";
+          const next: typeof s = { ...s, activeAgent: msg.agent ?? null };
+          if (agent !== "comms") {
+            next.trace = [
+              ...s.trace,
+              {
+                id: nextId(),
+                kind: "start",
+                agent,
+                model: msg.model,
+                at: Date.now(),
+              },
+            ];
+          }
+          return next;
+        });
         break;
 
       case "agent_delta": {
@@ -192,34 +195,30 @@ export function useIncidentSocket() {
           setState((s) => ({
             ...s,
             comms: msg.payload as CommsPayload,
-            trace: [
-              ...s.trace,
-              {
-                id: nextId(),
-                kind: "result",
-                agent: "comms",
-                payload: msg.payload,
-                at: Date.now(),
-              },
-            ],
           }));
         }
         break;
 
       case "agent_complete":
-        setState((s) => ({
-          ...s,
-          activeAgent: s.activeAgent === msg.agent ? null : s.activeAgent,
-          trace: [
-            ...s.trace,
-            {
-              id: nextId(),
-              kind: "complete",
-              agent: msg.agent ?? "unknown",
-              at: Date.now(),
-            },
-          ],
-        }));
+        setState((s) => {
+          const agent = msg.agent ?? "unknown";
+          const next: typeof s = {
+            ...s,
+            activeAgent: s.activeAgent === msg.agent ? null : s.activeAgent,
+          };
+          if (agent !== "comms") {
+            next.trace = [
+              ...s.trace,
+              {
+                id: nextId(),
+                kind: "complete",
+                agent,
+                at: Date.now(),
+              },
+            ];
+          }
+          return next;
+        });
         break;
 
       case "agent_error":

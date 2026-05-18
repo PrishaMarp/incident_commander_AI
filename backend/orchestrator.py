@@ -72,7 +72,6 @@ def run_incident(
             lines,
             triage,
             on_chunk=on_root_cause_chunk,
-            on_notice=lambda msg: emit(agent_delta("root_cause", f"\n{msg}\n")),
         )
     except Exception as exc:
         emit(agent_error("root_cause", format_api_error(exc)))
@@ -93,7 +92,6 @@ def run_incident(
             triage,
             root_cause_text,
             on_chunk=on_remediation_chunk,
-            on_notice=lambda msg: emit(agent_delta("remediation", f"\n{msg}\n")),
         )
     except Exception as exc:
         emit(agent_error("remediation", format_api_error(exc)))

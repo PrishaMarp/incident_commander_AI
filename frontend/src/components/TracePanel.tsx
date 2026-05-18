@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import type { TraceEntry } from "../types";
 import { Panel } from "./Panel";
-import { SlackPreview } from "./SlackPreview";
 
 const AGENT_LABELS: Record<string, string> = {
   triage: "Triage Agent",
@@ -81,6 +80,9 @@ function TraceCard({ entry }: { entry: TraceEntry }) {
   const name = AGENT_LABELS[entry.agent] ?? entry.agent;
 
   if (entry.kind === "start") {
+    if (entry.agent === "comms") {
+      return null;
+    }
     return (
       <div className="trace-agent-start animate-fade-in flex gap-3 rounded-lg border p-3">
         <AgentIcon agent={entry.agent} />
@@ -98,20 +100,8 @@ function TraceCard({ entry }: { entry: TraceEntry }) {
   }
 
   if (entry.kind === "result" && entry.payload) {
-    if (entry.agent === "comms" && "message" in entry.payload) {
-      const p = entry.payload as { channel?: string; message: string; status?: string };
-      return (
-        <div className="animate-fade-in">
-          <p className="mb-2 pl-1 text-xs font-medium" style={{ color: "var(--color-accent-dim)" }}>
-            {name}
-          </p>
-          <SlackPreview
-            channel={p.channel || "#incidents"}
-            message={p.message}
-            status={p.status}
-          />
-        </div>
-      );
+    if (entry.agent === "comms") {
+      return null;
     }
     if ("incident_type" in entry.payload) {
       const p = entry.payload;
@@ -136,6 +126,9 @@ function TraceCard({ entry }: { entry: TraceEntry }) {
   }
 
   if (entry.kind === "complete") {
+    if (entry.agent === "comms") {
+      return null;
+    }
     return (
       <p className="animate-fade-in pl-10 text-xs" style={{ color: "var(--color-success)" }}>
         ✓ {name} finished
