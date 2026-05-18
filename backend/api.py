@@ -5,9 +5,11 @@ import sys
 from collections.abc import Callable
 from pathlib import Path
 
-from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
+
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
@@ -24,6 +26,73 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_DIST = _ROOT / "frontend" / "dist"
+_INDEX = _DIST / "index.html"
+_ASSETS = _DIST / "assets"
+
+
+@app.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@app.get("/scenarios")
+async def list_scenarios() -> dict[str, list[str]]:
+    return {"scenarios": list(SCENARIOS)}
+
+
+def _threadsafe_emit(
+    loop: asyncio.AbstractEventLoop, queue: asyncio.Queue
+) -> Callable[[TraceEvent], None]:
+    def emit(event: TraceEvent) -> None:
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    return emit
+
+
+@app.websocket("/ws/incident")
+async def incident_ws(
+    websocket: WebSocket,
+    scenario: str = Query(default="db_failure"),
+) -> None:
+    await websocket.accept()
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[TraceEvent | None] = asyncio.Queue()
+    emit = _threadsafe_emit(loop, queue)
+
+    async def run_pipeline() -> None:
+        try:
+            await asyncio.to_thread(run_incident, scenario, emit)
+        except ValueError as exc:
+            await queue.put({"type": "agent_error", "agent": "orchestrator", "message": str(exc)})
+        except Exception as exc:
+            await queue.put(
+                {
+                    "type": "agent_error",
+                    "agent": "orchestrator",
+                    "message": format_api_error(exc),
+                }
+            )
+        finally:
+            await queue.put(None)
+
+    task = asyncio.create_task(run_pipeline())
+    try:
+        while True:
+            event = await queue.get()
+            if event is None:
+                break
+            await websocket.send_json(event)
+    except WebSocketDisconnect:
+        task.cancel()
+    finally:
+        if not task.done():
+            task.cancel()
+
+
+if _INDEX.is_file() and _ASSETS.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_ASSETS)), name="vite-assets")
 
 
 _DEMO_HTML = """<!DOCTYPE html>
@@ -118,68 +187,23 @@ _DEMO_HTML = """<!DOCTYPE html>
 """
 
 
-@app.get("/", response_class=HTMLResponse)
-async def demo_page() -> str:
-    return _DEMO_HTML
+@app.get("/", response_model=None)
+async def root_page() -> FileResponse | HTMLResponse:
+    """React dashboard when `frontend/dist` exists (e.g. Vercel); else minimal WebSocket demo."""
+    if _INDEX.is_file():
+        return FileResponse(_INDEX)
+    return HTMLResponse(_DEMO_HTML)
 
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok"}
-
-
-@app.get("/scenarios")
-async def list_scenarios() -> dict[str, list[str]]:
-    return {"scenarios": list(SCENARIOS)}
-
-
-def _threadsafe_emit(
-    loop: asyncio.AbstractEventLoop, queue: asyncio.Queue
-) -> Callable[[TraceEvent], None]:
-    def emit(event: TraceEvent) -> None:
-        loop.call_soon_threadsafe(queue.put_nowait, event)
-
-    return emit
-
-
-@app.websocket("/ws/incident")
-async def incident_ws(
-    websocket: WebSocket,
-    scenario: str = Query(default="db_failure"),
-) -> None:
-    await websocket.accept()
-    loop = asyncio.get_running_loop()
-    queue: asyncio.Queue[TraceEvent | None] = asyncio.Queue()
-    emit = _threadsafe_emit(loop, queue)
-
-    async def run_pipeline() -> None:
-        try:
-            await asyncio.to_thread(run_incident, scenario, emit)
-        except ValueError as exc:
-            await queue.put({"type": "agent_error", "agent": "orchestrator", "message": str(exc)})
-        except Exception as exc:
-            await queue.put(
-                {
-                    "type": "agent_error",
-                    "agent": "orchestrator",
-                    "message": format_api_error(exc),
-                }
-            )
-        finally:
-            await queue.put(None)
-
-    task = asyncio.create_task(run_pipeline())
-    try:
-        while True:
-            event = await queue.get()
-            if event is None:
-                break
-            await websocket.send_json(event)
-    except WebSocketDisconnect:
-        task.cancel()
-    finally:
-        if not task.done():
-            task.cancel()
+@app.get("/{full_path:path}", response_model=None)
+async def spa_or_static(full_path: str) -> FileResponse:
+    """Serve Vite-built files; client routes → index.html."""
+    if not _INDEX.is_file():
+        raise HTTPException(status_code=404, detail="Build frontend: cd frontend && npm run build")
+    candidate = _DIST / full_path
+    if candidate.is_file():
+        return FileResponse(candidate)
+    return FileResponse(_INDEX)
 
 
 if __name__ == "__main__":
