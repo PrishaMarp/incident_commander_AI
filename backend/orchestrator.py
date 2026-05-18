@@ -1,12 +1,11 @@
 """Run an incident simulation and emit trace events for live demo clients."""
 
 from collections.abc import Callable
-from typing import Any
 
 from backend.agents.comms import run_comms
 from backend.agents.remediation import run_remediation_streaming
 from backend.agents.root_cause import run_root_cause_streaming
-from backend.agents.triage import format_summary_line, run_triage
+from backend.agents.triage import run_triage
 from backend.config import COMMS_MODEL, REMEDIATION_MODEL, ROOT_CAUSE_MODEL, TRIAGE_MODEL
 from backend.gemini_util import format_api_error
 from backend.simulation import api_outage, db_failure, memory_leak
@@ -110,9 +109,3 @@ def run_incident(
     emit(agent_complete("comms"))
 
     emit(incident_complete())
-
-
-def format_triage_for_terminal(payload: dict[str, Any]) -> str:
-    from backend.models import TriageResult
-
-    return format_summary_line(TriageResult.model_validate(payload))
