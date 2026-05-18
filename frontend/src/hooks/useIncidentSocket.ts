@@ -383,9 +383,3 @@ export function useIncidentSocket() {
   };
 }
 
-export async function fetchScenarios(): Promise<string[]> {
-  const res = await fetch("/scenarios");
-  if (!res.ok) return ["db_failure"];
-  const data = (await res.json()) as { scenarios: string[] };
-  return data.scenarios?.length ? data.scenarios : ["db_failure"];
-}

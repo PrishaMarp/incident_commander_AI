@@ -3,15 +3,25 @@ import { LogPanel } from "./components/LogPanel";
 import { StatusPill } from "./components/StatusPill";
 import { SummaryPanel } from "./components/SummaryPanel";
 import { TracePanel } from "./components/TracePanel";
-import { fetchScenarios, useIncidentSocket } from "./hooks/useIncidentSocket";
+import { ScenarioSelect } from "./components/ScenarioSelect";
+import { useIncidentSocket } from "./hooks/useIncidentSocket";
+import {
+  DEFAULT_SCENARIOS,
+  fetchScenarios,
+  scenarioLabel,
+  type ScenarioOption,
+} from "./utils/scenarios";
 
 export default function App() {
-  const [scenarios, setScenarios] = useState<string[]>(["db_failure"]);
+  const [scenarios, setScenarios] = useState<ScenarioOption[]>(DEFAULT_SCENARIOS);
   const [selected, setSelected] = useState("db_failure");
   const incident = useIncidentSocket();
 
   useEffect(() => {
-    fetchScenarios().then(setScenarios).catch(() => {});
+    fetchScenarios().then((list) => {
+      setScenarios(list);
+      setSelected((prev) => (list.some((s) => s.id === prev) ? prev : list[0]?.id ?? "db_failure"));
+    });
   }, []);
 
   const isLive =
@@ -37,7 +47,7 @@ export default function App() {
             </div>
             <div>
               <h1 className="text-lg font-bold tracking-tight text-[var(--color-text)] sm:text-xl">
-                Incident Commander AI
+                Triagix
               </h1>
               <p className="text-xs text-[var(--color-muted)]">
                 Autonomous multi-agent SRE · live demo
@@ -51,19 +61,12 @@ export default function App() {
             <label className="sr-only" htmlFor="scenario">
               Scenario
             </label>
-            <select
-              id="scenario"
+            <ScenarioSelect
+              scenarios={scenarios}
               value={selected}
               disabled={incident.isRunning}
-              onChange={(e) => setSelected(e.target.value)}
-              className="rounded-lg border border-[var(--color-panel-border)] bg-[var(--color-surface-elevated)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] disabled:opacity-50"
-            >
-              {scenarios.map((s) => (
-                <option key={s} value={s}>
-                  {s.replace(/_/g, " ")}
-                </option>
-              ))}
-            </select>
+              onChange={setSelected}
+            />
 
             <button
               type="button"
@@ -121,6 +124,7 @@ export default function App() {
         <div className="flex min-h-[280px] flex-1 flex-col sm:min-h-0 sm:max-w-[30%]">
           <SummaryPanel
             scenario={incident.scenario}
+            scenarioLabel={scenarioLabel(incident.scenario, scenarios)}
             logs={incident.logs}
             triage={incident.triage}
             rootCause={incident.rootCause}

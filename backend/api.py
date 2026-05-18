@@ -17,6 +17,7 @@ if str(_ROOT) not in sys.path:
 
 from backend.gemini_util import format_api_error  # noqa: E402
 from backend.orchestrator import SCENARIOS, run_incident  # noqa: E402
+from backend.scenarios import list_scenario_catalog  # noqa: E402
 from backend.trace import TraceEvent  # noqa: E402
 
 app = FastAPI(title="Incident Commander AI")
@@ -39,8 +40,10 @@ async def health() -> dict[str, str]:
 
 
 @app.get("/scenarios")
-async def list_scenarios() -> dict[str, list[str]]:
-    return {"scenarios": list(SCENARIOS)}
+async def list_scenarios() -> dict[str, list]:
+    """Return scenario metadata for the UI; only ids present in SCENARIOS are listed."""
+    known = set(SCENARIOS)
+    return {"scenarios": [s for s in list_scenario_catalog() if s["id"] in known]}
 
 
 @app.get("/sse/incident")

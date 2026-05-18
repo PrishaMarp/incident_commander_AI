@@ -163,6 +163,7 @@ function AgentProgress({
 
 export function SummaryPanel({
   scenario,
+  scenarioLabel,
   logs,
   triage,
   rootCause,
@@ -172,6 +173,7 @@ export function SummaryPanel({
   activeAgent,
 }: {
   scenario: string | null;
+  scenarioLabel?: string | null;
   logs: string[];
   triage: TriagePayload | null;
   rootCause: string;
@@ -199,6 +201,7 @@ export function SummaryPanel({
 
   const reportInput: IncidentReportInput = {
     scenario,
+    scenarioLabel,
     triage,
     rootCause,
     remediation,

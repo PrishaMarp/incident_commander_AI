@@ -10,6 +10,7 @@ import {
 
 export interface IncidentReportInput {
   scenario: string | null;
+  scenarioLabel?: string | null;
   triage: TriagePayload | null;
   rootCause: string;
   remediation: string;
@@ -28,11 +29,15 @@ function formatScenario(scenario: string | null): string {
 }
 
 export function buildIncidentReportMarkdown(input: IncidentReportInput): string {
-  const { scenario, triage, rootCause, remediation, comms, logs } = input;
+  const { scenario, scenarioLabel, triage, rootCause, remediation, comms, logs } = input;
   const lines: string[] = [];
   const generated = new Date().toISOString();
+  const title = scenarioLabel?.trim() || formatScenario(scenario);
 
-  lines.push(`# Incident report — ${formatScenario(scenario)}`, "");
+  lines.push(`# Incident report — ${title}`, "");
+  if (scenario && scenarioLabel && scenario !== title) {
+    lines.push(`_Scenario id: \`${scenario}\`_`, "");
+  }
   lines.push(`_Generated ${generated}_`, "");
 
   if (triage) {
