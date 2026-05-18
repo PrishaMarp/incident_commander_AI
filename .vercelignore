@@ -1,0 +1,10 @@
+# Keep Python serverless bundle under limits — do not upload local installs
+frontend/node_modules
+node_modules
+venv
+.venv
+__pycache__
+*.pyc
+.git
+.pytest_cache
+.env
