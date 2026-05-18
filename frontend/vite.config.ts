@@ -13,4 +13,13 @@ export default defineConfig({
       "/health": { target: "http://127.0.0.1:8000" },
     },
   },
+  preview: {
+    port: 4173,
+    proxy: {
+      "/ws": { target: "http://127.0.0.1:8000", ws: true, changeOrigin: true },
+      "/sse": { target: "http://127.0.0.1:8000", changeOrigin: true },
+      "/scenarios": { target: "http://127.0.0.1:8000" },
+      "/health": { target: "http://127.0.0.1:8000" },
+    },
+  },
 });

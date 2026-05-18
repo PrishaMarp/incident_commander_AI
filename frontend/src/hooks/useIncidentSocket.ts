@@ -6,13 +6,12 @@ function nextId() {
   return `e-${++entryId}`;
 }
 
-/** Vercel serverless does not support WebSockets; use SSE instead. */
+/** Serverless (e.g. Vercel) has no WebSocket; production bundle uses SSE unless overridden. */
 function preferSse(): boolean {
-  if (import.meta.env.VITE_USE_SSE === "true") return true;
-  if (typeof window !== "undefined" && window.location.hostname.endsWith("vercel.app")) {
-    return true;
-  }
-  return false;
+  const flag = import.meta.env.VITE_USE_SSE as string | undefined;
+  if (flag === "false") return false;
+  if (flag === "true") return true;
+  return Boolean(import.meta.env.PROD);
 }
 
 function wsUrl(scenario: string): string {
